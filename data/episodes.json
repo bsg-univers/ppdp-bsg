@@ -1,0 +1,38 @@
+[
+  {
+    "episodeId": "4",
+    "playlistId": "SPÉCIAL Pierre Rigaux",
+    "title": "SPÉCIAL Pierre Rigaux 4/4 : La \"bête noire\", comment réguler les sangliers ?",
+    "audio": "https://audio.ausha.co/odK1kFD0nMPW.mp3?t=1780322190",
+    "order": 4,
+    "guid": "954513adfb31168f818f5944fed26c0802d5c7a8",
+    "image": "https://image.ausha.co/s7vAjsP4CuzBQDmGroNouQsycI692vSNpO7z8eD5_1400x1400.jpeg?t=1780322146"
+  },
+  {
+    "episodeId": "3",
+    "playlistId": "SPÉCIAL Pierre Rigaux",
+    "title": "SPÉCIAL Pierre Rigaux 3/4 : Quelles sont les espèces les plus chassées en France ?",
+    "audio": "https://audio.ausha.co/BDQAVClODJWA.mp3?t=1780322065",
+    "order": 3,
+    "guid": "0c6feff949b9ebe02e8f7849d311bf5e3ec51f60",
+    "image": "https://image.ausha.co/5fCOPMT4H2wSOCLsOk3CZWICSIXmnrUVBxBY9jzT_1400x1400.jpeg?t=1780322019"
+  },
+  {
+    "episodeId": "2",
+    "playlistId": "SPÉCIAL Pierre Rigaux",
+    "title": "SPÉCIAL Pierre Rigaux 2/4 : À quand le jour sans chasse en France ?",
+    "audio": "https://audio.ausha.co/brKd9FKwJxnR.mp3?t=1780322004",
+    "order": 2,
+    "guid": "5fe192c1b877f5b51be7ab98f2e57859ddb25919",
+    "image": "https://image.ausha.co/5nPzSuc5mdJXaP4vALQ0EGZavdh8qhFXdUEqHKKn_1400x1400.jpeg?t=1780321954"
+  },
+  {
+    "episodeId": "1",
+    "playlistId": "SPÉCIAL Pierre Rigaux",
+    "title": "SPÉCIAL Pierre Rigaux 1/4 : \"L'abattage récréatif des animaux par des amateurs doit être aboli\" (rediffusion)",
+    "audio": "https://audio.ausha.co/Gb22YQFzMkpb.mp3?t=1780321954",
+    "order": 1,
+    "guid": "61d4ad84a9cb331ed7621024fe9170bf72cf3627",
+    "image": "https://image.ausha.co/8HCdwwceXuwu8N7CLIEx9UkYOYFFEU7QvtFzw7hn_1400x1400.jpeg?t=1780321775"
+  }
+]
