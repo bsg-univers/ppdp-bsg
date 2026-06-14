@@ -2165,7 +2165,46 @@ function updateMediaSession(episode) {
 
     navigator.mediaSession.playbackState = "playing";
 }
+function setupMediaSessionActions() {
+    if (!('mediaSession' in navigator)) return;
 
+    // Action PLAY sur l'écran verrouillé
+    navigator.mediaSession.setActionHandler('play', async () => {
+        try {
+            await audio.play();
+            navigator.mediaSession.playbackState = "playing";
+        } catch (err) {
+            console.error("Erreur lors du play depuis l'écran verrouillé :", err);
+        }
+    });
+
+    // Action PAUSE sur l'écran verrouillé
+    navigator.mediaSession.setActionHandler('pause', () => {
+        audio.pause();
+        navigator.mediaSession.playbackState = "paused";
+        // Astuce : On ne coupe pas le WakeLock immédiatement pour laisser le script actif
+    });
+
+    // Action ÉPISODE PRÉCÉDENT
+    navigator.mediaSession.setActionHandler('previoustrack', () => {
+        if (current > 0) {
+            play(current - 1);
+        }
+    });
+
+    // Action ÉPISODE SUIVANT
+    navigator.mediaSession.setActionHandler('nexttrack', () => {
+        if (current + 1 < episodes.length) {
+            // Utilise le système de bascule si l'épisode suivant est déjà prêt
+            switchPlayers();
+            play(current + 1);
+        }
+    });
+}
+
+// Appelle cette fonction UNE SEULE FOIS au démarrage de l'application
+setupMediaSessionActions();
+    
 // --- GESTION DU WAKE LOCK (Empêcher la mise en veille profonde) ---
 let wakeLock = null;
 async function requestWakeLock() {
