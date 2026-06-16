@@ -2080,9 +2080,28 @@ function setupAudioListeners(playerElement) {
 
   playerElement.addEventListener('pause', () => {
     if (playerElement !== audio) return;
+
     uiPlayer.classList.remove('is-playing');
-    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "paused";
-  });
+
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = "paused";
+
+        if (episodes[current]) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: episodes[current].title,
+                artist: "Baleine sous Gravillon",
+                album: "Podcast",
+                artwork: [
+                    {
+                        src: episodes[current].image,
+                        sizes: "512x512",
+                        type: "image/jpeg"
+                    }
+                ]
+            });
+        }
+    }
+});
 
   // CHANGEMENT ICI : On supprime totalement setPositionState pour éviter les sauts de titre
   playerElement.addEventListener('timeupdate', () => {
