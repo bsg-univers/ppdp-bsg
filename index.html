@@ -1270,7 +1270,17 @@ whaleBtn.addEventListener('click', () => {
 });
 
 audio.addEventListener('play', () => uiPlayer.classList.add('is-playing'));
-audio.addEventListener('pause', () => uiPlayer.classList.remove('is-playing'));
+// Écouteur sur l'élément audio (ou tes variables audioA / audioB selon le lecteur actif)
+audio.addEventListener('pause', () => {
+    // 1. On met à jour l'interface utilisateur (boutons play/pause du site)
+    uiPlayer.classList.remove('is-playing');
+    
+    // 2. On informe le système mobile que la lecture est suspendue, 
+    // mais le système sait que le fichier est toujours chargé dans 'audio.src'
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = "paused";
+    }
+});
 
 /* --- Durée --- */
 audio.addEventListener('loadedmetadata', () => {
@@ -2033,10 +2043,11 @@ async function play(i) {
     }
 
     // Mise à jour immédiate de l'écran verrouillé
-    updateMediaSession(episode);
+    
 
     try {
         await audio.play();
+        updateMediaSession(episode);
     } catch (err) {
         console.error("Échec initial de la lecture, tentative de rechargement...", err);
         setTimeout(async () => {
@@ -2168,41 +2179,32 @@ function updateMediaSession(episode) {
 function setupMediaSessionActions() {
     if (!('mediaSession' in navigator)) return;
 
-    // Action PLAY depuis l'écran verrouillé
+    // Quand l'utilisateur appuie sur PLAY depuis l'écran verrouillé
     navigator.mediaSession.setActionHandler('play', async () => {
+        // Le flux est conservé, on a juste à faire play()
         try {
-            // SÉCURITÉ : On cherche dynamiquement quel lecteur contient le morceau actuel
-            const activePlayer = (audioA.src === currentMediaSrc) ? audioA : audioB;
-            
-            await activePlayer.play();
-            audio = activePlayer; // On s'assure que la variable globale est bien synchronisée
+            // On récupère le lecteur audio actuellement actif (audioA ou audioB)
+            const activeAudio = getActiveAudio(); 
+            await activeAudio.play();
             navigator.mediaSession.playbackState = "playing";
         } catch (err) {
-            console.error("Erreur lors du play depuis l'écran verrouillé :", err);
+            console.error("Erreur lors de la reprise depuis l'écran verrouillé :", err);
         }
     });
 
-    // Action PAUSE depuis l'écran verrouillé
+    // Quand l'utilisateur appuie sur PAUSE depuis l'écran verrouillé
     navigator.mediaSession.setActionHandler('pause', () => {
-        // On met en pause les deux lecteurs par sécurité pour être sûr de cibler le bon
-        audioA.pause();
-        audioB.pause();
+        const activeAudio = getActiveAudio();
+        activeAudio.pause();
         navigator.mediaSession.playbackState = "paused";
     });
 
-    // Action ÉPISODE PRÉCÉDENT
-    navigator.mediaSession.setActionHandler('previoustrack', () => {
-        if (current > 0) {
-            play(current - 1);
-        }
+    // Gestion des boutons Suivant / Précédent (optionnel, selon ton code existant)
+    navigator.mediaSession.setActionHandler('previousepisode', () => {
+        playPrevious(); // Appelle ta fonction pour l'épisode précédent
     });
-
-    // Action ÉPISODE SUIVANT
-    navigator.mediaSession.setActionHandler('nexttrack', () => {
-        if (current + 1 < episodes.length) {
-            switchPlayers();
-            play(current + 1);
-        }
+    navigator.mediaSession.setActionHandler('nextepisode', () => {
+        playNext(); // Appelle ta fonction pour l'épisode suivant
     });
 }
 
