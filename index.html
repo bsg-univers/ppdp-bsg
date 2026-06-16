@@ -1250,8 +1250,9 @@ let allPlaylists = [];
 const audioA = document.getElementById('player-a');
 const audioB = document.getElementById('player-b');
 
-let audio = audioA;       // Devient le lecteur actif
-let nextAudio = audioB;   // Devient le lecteur de secours
+// Ces variables servent de référence interne pour ton système de bascule
+let audio = audioA;       // Premier lecteur actif par défaut
+let nextAudio = audioB;   // Lecteur de secours par défaut
 const titleDisplay = document.getElementById('now-playing-title');
 
 const whaleBtn = document.getElementById('whale-btn');
@@ -1264,52 +1265,32 @@ const uiPlayer = document.querySelector('.bsg-audio-player');
 let isScrubbing = false;
 let currentSeason = null;
 
-/* --- Play / Pause --- */
+/* --- Play / Pause (Bouton du site) --- */
 whaleBtn.addEventListener('click', () => {
-    audio.paused ? audio.play() : audio.pause();
+    const activeAudio = getActiveAudio();
+    activeAudio.paused ? activeAudio.play() : activeAudio.pause();
 });
 
-audio.addEventListener('play', () => uiPlayer.classList.add('is-playing'));
-// Écouteur sur l'élément audio (ou tes variables audioA / audioB selon le lecteur actif)
-audio.addEventListener('pause', () => {
-    // 1. On met à jour l'interface utilisateur (boutons play/pause du site)
-    uiPlayer.classList.remove('is-playing');
-    
-    // 2. On informe le système mobile que la lecture est suspendue, 
-    // mais le système sait que le fichier est toujours chargé dans 'audio.src'
-    if ('mediaSession' in navigator) {
-        navigator.mediaSession.playbackState = "paused";
-    }
-});
-
-/* --- Durée --- */
-audio.addEventListener('loadedmetadata', () => {
-    durationEl.textContent = formatTime(audio.duration);
-});
-
-/* --- Progression --- */
-audio.addEventListener('timeupdate', () => {
-    if (isScrubbing || !audio.duration) return;
-    updateProgress(audio.currentTime / audio.duration);
-});
-
-/* --- Scrub clic + drag --- */
+/* --- Scrub clic + drag (Barre de progression du site) --- */
 const seek = (clientX) => {
+    const activeAudio = getActiveAudio(); // Utilisation du lecteur dynamique actif
     const rect = waveTrack.getBoundingClientRect();
     const ratio = Math.min(Math.max(0, clientX - rect.left), rect.width) / rect.width;
-    audio.currentTime = ratio * audio.duration;
+    activeAudio.currentTime = ratio * activeAudio.duration;
     updateProgress(ratio);
 };
 
 waveTrack.addEventListener('pointerdown', e => {
     isScrubbing = true;
-    audio.pause();
+    const activeAudio = getActiveAudio();
+    activeAudio.pause();
     seek(e.clientX);
 });
 
 window.addEventListener('pointerup', () => {
-    if (isScrubbing && audio.currentTime < audio.duration) {
-        audio.play();
+    const activeAudio = getActiveAudio();
+    if (isScrubbing && activeAudio.currentTime < activeAudio.duration) {
+        activeAudio.play();
     }
     isScrubbing = false;
 });
@@ -1318,17 +1299,14 @@ window.addEventListener('pointermove', e => {
     if (isScrubbing) seek(e.clientX);
 });
 
-
 const pathLength = waveProgress.getTotalLength();
-
 waveProgress.style.strokeDasharray = pathLength;
 waveProgress.style.strokeDashoffset = pathLength;
 
 function updateProgress(ratio) {
-    waveProgress.style.strokeDashoffset =
-        pathLength - ratio * pathLength;
-
-    currentTimeEl.textContent = formatTime(audio.currentTime);
+    const activeAudio = getActiveAudio();
+    waveProgress.style.strokeDashoffset = pathLength - ratio * pathLength;
+    currentTimeEl.textContent = formatTime(activeAudio.currentTime);
 }
     
 function formatTime(t) {
@@ -1338,31 +1316,22 @@ function formatTime(t) {
     return `${m}:${s}`;
 }
 
-
-// --- MEDIA SESSION : handlers déclarés UNE SEULE FOIS ---
+// --- CONFIGURATION DE LA MEDIA SESSION (ÉCRAN VERROUILLÉ) ---
 if ('mediaSession' in navigator) {
-    navigator.mediaSession.setActionHandler('play', () => audio.play());
-    navigator.mediaSession.setActionHandler('pause', () => audio.pause());
-    navigator.mediaSession.setActionHandler('previoustrack', () => {
-        if (current > 0) play(current - 1);
-    });
-    navigator.mediaSession.setActionHandler('nexttrack', () => {
-        if (current + 1 < episodes.length) play(current + 1);
-    });
     navigator.mediaSession.setActionHandler('seekbackward', (d) => {
-        audio.currentTime -= (d.seekOffset || 10);
+        const activeAudio = getActiveAudio();
+        activeAudio.currentTime -= (d.seekOffset || 10);
     });
     navigator.mediaSession.setActionHandler('seekforward', (d) => {
-        audio.currentTime += (d.seekOffset || 10);
+        const activeAudio = getActiveAudio();
+        activeAudio.currentTime += (d.seekOffset || 10);
     });
 }
 
 async function loadJSON(file) {
-  // On ajoute ?v= et l'heure actuelle pour ignorer le cache
   const res = await fetch(`data/${file}?v=${new Date().getTime()}`);
   return await res.json();
 }
-
 
 // --- PLAYLISTS ---
 async function loadPlaylists() {
@@ -1376,17 +1345,14 @@ async function loadPlaylists() {
     const seasons = [...new Set(allPlaylists.map(p => p.season))].sort().reverse();
     const grid = document.getElementById('seasons_grid');
 
-    // Remplace cette partie :
     grid.innerHTML = seasons.map(s =>
         `<div class="season-item" onclick="showPlaylistsBySeason('${s}')">${s.replace(/saison\s?/i, '')}</div>`
     ).join('');
-        // --- Désynchronisation des galets (float organique) ---
-    const seasonItems = grid.querySelectorAll('.season-item');
-    
-    seasonItems.forEach(item => {
-      item.style.setProperty('--i', Math.random() * 6);
-    });
 
+    const seasonItems = grid.querySelectorAll('.season-item');
+    seasonItems.forEach(item => {
+        item.style.setProperty('--i', Math.random() * 6);
+    });
 
     if (initialPlaylistId) {
         const shared = allPlaylists.find(p => String(p.id).trim() === initialPlaylistId.trim());
@@ -1400,7 +1366,7 @@ async function loadPlaylists() {
     showPlaylistsBySeason(seasons[0]);
 }
 
- function resetPlayerImage() {
+function resetPlayerImage() {
     const pImg = document.getElementById('player-img');
     if (pImg) {
         pImg.src = "https://raw.githubusercontent.com/bsg-univers/ppdp-bsg/refs/heads/main/media/ppdp.png";
@@ -1408,7 +1374,7 @@ async function loadPlaylists() {
         pImg.classList.add('is-logo');
     }
 }
-    
+
 function showPlaylistsBySeason(season) {
     currentSeason = season;
     const dock = document.querySelector('.nav-dock');
@@ -1416,7 +1382,6 @@ function showPlaylistsBySeason(season) {
 
     resetPlayerImage();
 
-    // Gestion de l'état actif des boutons de saison
     document.querySelectorAll('.season-item').forEach(btn => {
         const active = btn.innerText === season;
         btn.style.borderColor = active ? "var(--primary)" : "rgba(243,195,0,0.2)";
@@ -1426,45 +1391,25 @@ function showPlaylistsBySeason(season) {
     const list = allPlaylists.filter(p => p.season === season);
     const div = document.getElementById('episodes_list');
 
-    // STRUCTURE DE LA PAGE
-    // On crée l'en-tête, la barre de recherche et SURTOUT le conteneur vide pour les playlists
     div.innerHTML = `
         <div class="season-title-container">
             <h2 id="view-title">${season}</h2>
             <div style="display: flex; gap: 6px; align-items: center;">
-                <div class="btn-explore-themes" onclick="showSavedList('favorites')" title="Mes Favoris" 
-                     style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0; font-size: 1.2rem;">
-                    ❤️
-                </div>
-                <div class="btn-explore-themes" onclick="showSavedList('later')" title="À regarder plus tard" 
-                     style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0; font-size: 1.2rem;">
-                    🕒
-                </div>
-                <div class="btn-explore-themes" onclick="toggleHashtagLibrary()" title="Explorer par thématiques"
-                     style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0; font-size: 1.2rem;">
-                    🤿
-                </div>
+                <div class="btn-explore-themes" onclick="showSavedList('favorites')" title="Mes Favoris" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0; font-size: 1.2rem;">❤️</div>
+                <div class="btn-explore-themes" onclick="showSavedList('later')" title="À regarder plus tard" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0; font-size: 1.2rem;">🕒</div>
+                <div class="btn-explore-themes" onclick="toggleHashtagLibrary()" title="Explorer par thématiques" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0; font-size: 1.2rem;">🤿</div>
             </div>
         </div>
         <div class="search-container">
-            <input 
-                type="text" 
-                id="playlist-search" 
-                placeholder="Rechercher une série..."
-                autocomplete="off"
-            >
+            <input type="text" id="playlist-search" placeholder="Rechercher une série..." autocomplete="off">
         </div>
         <div id="hashtag-library" style="display: none; margin-bottom: 20px; padding: 15px; background: rgba(255,255,255,0.03); border-radius: 15px; border: 1px solid rgba(210, 179, 71, 0.1);">
             <div id="hashtag-cloud" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start;"></div>
         </div>
-        
         <div id="playlists-container"></div>
     `;
 
-    // 1. On affiche la liste initiale
     renderFilteredPlaylists(list);
-
-    // 2. On active la barre de recherche
     initSearchBar();
 }
 
@@ -1481,7 +1426,6 @@ function renderFilteredPlaylists(list, isGlobalSearch = false) {
 
     list.forEach(p => {
         const encoded = btoa(unescape(encodeURIComponent(p.id)));
-
         const savedLater = JSON.parse(localStorage.getItem('bsg_later') || "[]");
         const isLater = savedLater.includes(String(p.id));
 
@@ -1489,7 +1433,6 @@ function renderFilteredPlaylists(list, isGlobalSearch = false) {
         banner.className = 'playlist-banner';
         banner.onclick = () => loadEpisodes(encoded, true);
 
-        // --- Génération extrait description ---
         let excerpt = "";
         if (p.description) {
             const clean = p.description.replace(/<[^>]+>/g, '').trim();
@@ -1503,46 +1446,31 @@ function renderFilteredPlaylists(list, isGlobalSearch = false) {
         }
 
         const hashtagsHtml = p.hashtags
-            ? `<div class="playlist-tags-area">
-                ${p.hashtags.split(' ').filter(t => t.trim() !== "").map(tag =>
-                    `<span class="tag-mini" data-tag="${tag}">#${tag}</span>`
-                ).join('')}
-               </div>`
+            ? `<div class="playlist-tags-area">${p.hashtags.split(' ').filter(t => t.trim() !== "").map(tag => `<span class="tag-mini" data-tag="${tag}">#${tag}</span>`).join('')}</div>`
             : "";
 
         banner.innerHTML = `
             <div class="playlist-top-row" style="display: flex; align-items: flex-start; gap: 12px; width: 100%;">
                 <img src="${p.image || ''}" class="playlist-thumb" style="flex-shrink: 0;">
-                
                 <div class="playlist-info" style="flex-grow: 1; min-width: 0;">
                     <div class="playlist-info-header" style="display: flex; flex-direction: column; gap: 4px;">
                         <span class="playlist-name-text"><strong>${p.name}</strong></span>
                         ${isGlobalSearch ? `<span class="season-badge">${p.season}</span>` : ""}
                     </div>
                 </div>
-
                 <div style="display:flex; flex-direction:column; gap:6px; flex-shrink:0;">
-                    <button class="btn-share"
-                        onclick="event.stopPropagation(); sharePlaylist(event, '${encoded}')"
-                        title="Partager">🔗</button>
-
-                    <button class="btn-share"
-                        onclick="event.stopPropagation(); toggleSave('later', '${p.id}', this)"
-                        title="À regarder plus tard">
-                        ${isLater ? '🕒' : '⏳'}
-                    </button>
+                    <button class="btn-share" onclick="event.stopPropagation(); sharePlaylist(event, '${encoded}')" title="Partager">🔗</button>
+                    <button class="btn-share" onclick="event.stopPropagation(); toggleSave('later', '${p.id}', this)" title="À regarder plus tard">${isLater ? '🕒' : '⏳'}</button>
                 </div>
             </div>
-
             ${excerpt ? `<div class="playlist-excerpt">${excerpt}</div>` : ""}
-
             ${hashtagsHtml}
         `;
 
         banner.querySelectorAll('.tag-mini').forEach(tagEl => {
-            tagEl.onclick = (e) => { 
-                e.stopPropagation(); 
-                filterByHashtag(e, tagEl.dataset.tag); 
+            tagEl.onclick = (e) => {
+                e.stopPropagation();
+                filterByHashtag(e, tagEl.dataset.tag);
             };
         });
 
@@ -1558,21 +1486,16 @@ function initSearchBar() {
         const query = input.value.toLowerCase().trim();
 
         if (query === "") {
-            // Si la barre est vide, on revient à l'affichage de la saison actuelle
             const defaultList = allPlaylists.filter(p => p.season === currentSeason);
             renderFilteredPlaylists(defaultList);
             return;
         }
 
-        // RECHERCHE GLOBALE : On filtre sur TOUTES les playlists
         const filtered = allPlaylists.filter(p => {
-            const matchText =
-                p.name.toLowerCase().includes(query) ||
-                (p.hashtags && p.hashtags.toLowerCase().includes(query));
-            return matchText;
+            return p.name.toLowerCase().includes(query) || (p.hashtags && p.hashtags.toLowerCase().includes(query));
         });
 
-        renderFilteredPlaylists(filtered, true); // On ajoute un badge "isGlobal"
+        renderFilteredPlaylists(filtered, true);
     };
 
     input.addEventListener('input', performSearch);
@@ -1584,12 +1507,12 @@ function initSearchBar() {
     });
 }
 
-// Appelez cette fonction au chargement
 window.addEventListener('DOMContentLoaded', resetPlayerImage);
+
 function toggleHashtagLibrary() {
     const library = document.getElementById('hashtag-library');
     const cloud = document.getElementById('hashtag-cloud');
-    
+
     if (library.style.display === 'block') {
         library.style.display = 'none';
         return;
@@ -1598,45 +1521,34 @@ function toggleHashtagLibrary() {
     let allTags = [];
     allPlaylists.forEach(p => {
         if (p.hashtags) {
-            // On sépare par espace et on nettoie les tags vides
             const tags = p.hashtags.split(' ').filter(t => t.trim() !== "");
             allTags = allTags.concat(tags);
         }
     });
 
-    // Nettoyage : dédoublonnage et tri alphabétique
     const uniqueTags = [...new Set(allTags)].sort((a, b) => a.localeCompare(b));
 
-    // Utilisation de la classe .tag-mini pour la cohérence visuelle
     cloud.innerHTML = uniqueTags.map(tag => `
-        <span class="tag-mini" style="cursor:pointer; padding: 5px 12px; font-size: 0.85rem;" onclick="filterByHashtag(event, '${tag}')">
-            #${tag}
-        </span>
+        <span class="tag-mini" style="cursor:pointer; padding: 5px 12px; font-size: 0.85rem;" onclick="filterByHashtag(event, '${tag}')">#${tag}</span>
     `).join('');
 
     library.style.display = 'block';
 }
-    
+
 function filterByHashtag(event, tag) {
     if (event) event.stopPropagation();
-    
-    const div = document.getElementById('episodes_list');
 
+    const div = document.getElementById('episodes_list');
     div.innerHTML = `
         <div class="season-title-container">
             <h2>#${tag}</h2>
-            <div class="btn-explore-themes" onclick="showPlaylistsBySeason(allPlaylists[0].season)" title="Retour">
-                ✕
-            </div>
+            <div class="btn-explore-themes" onclick="showPlaylistsBySeason(allPlaylists[0].season)" title="Retour">✕</div>
         </div>
         <div id="playlists-container"></div>
     `;
 
     const container = document.getElementById('playlists-container');
-
-    const filtered = allPlaylists.filter(p => 
-        p.hashtags && p.hashtags.includes(tag)
-    );
+    const filtered = allPlaylists.filter(p => p.hashtags && p.hashtags.includes(tag));
 
     if (!filtered.length) {
         container.innerHTML = `<p style="text-align:center; padding:40px; opacity:0.5;">Aucun résultat.</p>`;
@@ -1645,11 +1557,9 @@ function filterByHashtag(event, tag) {
 
     filtered.forEach(p => {
         const encoded = btoa(unescape(encodeURIComponent(p.id)));
-
         const savedLater = JSON.parse(localStorage.getItem('bsg_later') || "[]");
         const isLater = savedLater.includes(String(p.id));
 
-        // --- Extrait description ---
         let excerpt = "";
         if (p.description) {
             const clean = p.description.replace(/<[^>]+>/g, '').trim();
@@ -1663,12 +1573,7 @@ function filterByHashtag(event, tag) {
         }
 
         const hashtagsHtml = p.hashtags
-            ? `<div class="playlist-tags-area">
-                ${p.hashtags.split(' ').filter(t => t.trim() !== "").map(t =>
-                    `<span class="tag-mini ${t === tag ? 'active-tag' : ''}" 
-                        onclick="filterByHashtag(event, '${t}')">#${t}</span>`
-                ).join('')}
-               </div>`
+            ? `<div class="playlist-tags-area">${p.hashtags.split(' ').filter(t => t.trim() !== "").map(t => `<span class="tag-mini ${t === tag ? 'active-tag' : ''}" onclick="filterByHashtag(event, '${t}')">#${t}</span>`).join('')}</div>`
             : "";
 
         const banner = document.createElement('div');
@@ -1678,47 +1583,28 @@ function filterByHashtag(event, tag) {
         banner.innerHTML = `
             <div class="playlist-top-row" style="display:flex; align-items:flex-start; gap:12px; width:100%;">
                 <img src="${p.image || ''}" class="playlist-thumb">
-
                 <div class="playlist-info" style="flex:1; min-width:0;">
                     <span class="playlist-name-text"><strong>${p.name}</strong></span>
                 </div>
-
                 <div style="display:flex; flex-direction:column; gap:6px;">
-                    <button class="btn-share"
-                        onclick="event.stopPropagation(); sharePlaylist(event, '${encoded}')"
-                        title="Partager">🔗</button>
-
-                    <button class="btn-share"
-                        onclick="event.stopPropagation(); toggleSave('later', '${p.id}', this)"
-                        title="À regarder plus tard">
-                        ${isLater ? '🕒' : '⏳'}
-                    </button>
+                    <button class="btn-share" onclick="event.stopPropagation(); sharePlaylist(event, '${encoded}')" title="Partager">🔗</button>
+                    <button class="btn-share" onclick="event.stopPropagation(); toggleSave('later', '${p.id}', this)" title="À regarder plus tard">${isLater ? '🕒' : '⏳'}</button>
                 </div>
             </div>
-
             ${excerpt ? `<div class="playlist-excerpt">${excerpt}</div>` : ""}
-
             ${hashtagsHtml}
         `;
-
         container.appendChild(banner);
     });
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-    
-// --- PARTAGE NATIF + COPIE ---
+
 async function sharePlaylist(e, encodedPid) {
     if (e) e.stopPropagation();
-    
-    // On décode l'ID pour avoir le nom en clair (ex: "Les Baleines")
     const pid = decodeURIComponent(escape(atob(encodedPid)));
-    
-    // On construit l'URL proprement
     const url = new URL(window.location.origin + window.location.pathname);
-    
-    // IMPORTANT : On utilise le nom en clair 'pid' comme dans votre version originale
-    url.searchParams.set('playlistId', pid); 
+    url.searchParams.set('playlistId', pid);
     const shareUrl = url.toString();
 
     const shareData = {
@@ -1735,7 +1621,6 @@ async function sharePlaylist(e, encodedPid) {
             showToast("Lien de la série copié !");
         }
     } catch (err) {
-        // En cas d'erreur ou d'annulation sur mobile, on copie en secours
         await navigator.clipboard.writeText(shareUrl);
         if (err.name !== 'AbortError') {
             showToast("Lien copié dans le presse-papier");
@@ -1745,18 +1630,12 @@ async function sharePlaylist(e, encodedPid) {
 
 function showToast(message) {
     const toast = document.getElementById("toast");
-    // On met à jour le texte du toast avec le message reçu
+    if (!toast) return;
     toast.innerText = message;
     toast.className = "show";
-    
-    setTimeout(() => { 
-        toast.className = ""; 
-    }, 3000);
+    setTimeout(() => { toast.className = ""; }, 3000);
 }
 
-// --- GESTION DES LISTES LOCALES ---
-
-// Initialisation des données si elles n'existent pas
 if (!localStorage.getItem('bsg_favorites')) localStorage.setItem('bsg_favorites', JSON.stringify([]));
 if (!localStorage.getItem('bsg_later')) localStorage.setItem('bsg_later', JSON.stringify([]));
 
@@ -1767,53 +1646,48 @@ function toggleSave(listType, playlistId, btn) {
     let message = "";
 
     if (index > -1) {
-            // SUPPRESSION
-            items.splice(index, 1);
-            if (listType === 'favorites') {
-                // On utilise un span pour appliquer l'élargissement au symbole vide
-                btn.innerHTML = '<span class="heart-empty">♡</span>';
-                message = "Retiré des favoris";
-            } else {
-                btn.innerText = '⏳';
-                message = "Retiré de 'À regarder plus tard'";
-            }
+        items.splice(index, 1);
+        if (listType === 'favorites') {
+            btn.innerHTML = '<span class="heart-empty">♡</span>';
+            message = "Retiré des favoris";
         } else {
-            // AJOUT
-            items.push(playlistId);
-            if (listType === 'favorites') {
-                btn.innerText = '❤️';
-                message = "Ajouté aux favoris !";
-            } else {
-                btn.innerText = '🕒';
-                message = "Ajouté à 'À regarder plus tard'";
-            }
+            btn.innerText = '⏳';
+            message = "Retiré de 'À regarder plus tard'";
         }
+    } else {
+        items.push(playlistId);
+        if (listType === 'favorites') {
+            btn.innerText = '❤️';
+            message = "Ajouté aux favoris !";
+        } else {
+            btn.innerText = '🕒';
+            message = "Ajouté à 'À regarder plus tard'";
+        }
+    }
 
     localStorage.setItem(key, JSON.stringify(items));
     showToast(message);
 
-    // Si on est dans la vue "Liste", on rafraîchit pour masquer l'élément supprimé
     const currentTitle = document.getElementById('view-title')?.innerText || "";
     if (currentTitle.includes("Mes") || currentTitle.includes("Regarder")) {
         showSavedList(listType);
     }
 }
+
 function resetMediaState() {
-    audio.pause();
-    audio.src = "";
-    
+    const activeAudio = getActiveAudio();
+    activeAudio.pause(); // On coupe le son proprement sans détruire le cache .src
     if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = null;
     }
 }
-    
+
 function showSavedList(listType) {
     const key = 'bsg_' + listType;
     const savedIds = JSON.parse(localStorage.getItem(key) || "[]");
     const div = document.getElementById('episodes_list');
     const title = listType === 'favorites' ? 'Mes Favoris ❤️' : 'À regarder plus tard 🕒';
-    
-    // Entête de la liste avec bouton retour
+
     div.innerHTML = `
         <div class="season-title-container">
             <h2 id="view-title">${title}</h2>
@@ -1821,7 +1695,6 @@ function showSavedList(listType) {
         </div>
     `;
 
-    // On cherche les objets playlist correspondants aux IDs sauvés
     const filtered = allPlaylists.filter(p => savedIds.includes(String(p.id)));
 
     if (filtered.length === 0) {
@@ -1829,7 +1702,6 @@ function showSavedList(listType) {
         return;
     }
 
-    // Affichage des cartes
     filtered.forEach(p => {
         const encoded = btoa(unescape(encodeURIComponent(p.id)));
         div.innerHTML += `
@@ -1838,19 +1710,16 @@ function showSavedList(listType) {
                     <img src="${p.image || ''}" class="playlist-thumb">
                     <span class="playlist-name-text"><strong>${p.name}</strong></span>
                     <div style="display:flex; gap:5px;">
-                         <button class="btn-share" onclick="event.stopPropagation(); toggleSave('${listType}', '${p.id}', this)">
-                            ${listType === 'favorites' ? '❤️' : '🕒'}
-                         </button>
-                         <button class="btn-share" onclick="sharePlaylist(event, '${encoded}')">🔗</button>
+                        <button class="btn-share" onclick="event.stopPropagation(); toggleSave('${listType}', '${p.id}', this)">${listType === 'favorites' ? '❤️' : '🕒'}</button>
+                        <button class="btn-share" onclick="sharePlaylist(event, '${encoded}')">🔗</button>
                     </div>
                 </div>
             </div>`;
     });
-    
+
     window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
-// Fonction utilitaire pour générer le HTML d'une carte (pour éviter la répétition)
 function renderPlaylistCard(p, encoded) {
     return `
         <div class="playlist-banner" onclick="loadEpisodes('${encoded}', true)">
@@ -1860,8 +1729,7 @@ function renderPlaylistCard(p, encoded) {
                     <span class="playlist-name-text"><strong>${p.name}</strong></span>
                 </div>
                 <div style="display: flex; gap: 5px;">
-                    <button class="btn-share" style="background: rgba(255,255,255,0.1);" 
-                        onclick="event.stopPropagation(); toggleSave('favorites', '${p.id}', this)">
+                    <button class="btn-share" style="background: rgba(255,255,255,0.1);" onclick="event.stopPropagation(); toggleSave('favorites', '${p.id}', this)">
                         ${JSON.parse(localStorage.getItem('bsg_favorites')).includes(p.id) ? '❤️' : '♡'}
                     </button>
                     <button class="btn-share" onclick="sharePlaylist(event, '${encoded}')">🔗</button>
@@ -1870,41 +1738,28 @@ function renderPlaylistCard(p, encoded) {
         </div>`;
 }
 
-// --- FONCTION COMPLÈTE : CHARGEMENT DES ÉPISODES AVEC LISTES PERSO ---
 async function loadEpisodes(pid, encoded = false) {
-    // 1. Gestion de l'affichage du dock
     const dock = document.querySelector('.nav-dock');
     if (dock) dock.classList.add('is-static');
-    
-    // 2. Décodage de l'ID de la playlist
-    const cleanId = encoded 
-        ? decodeURIComponent(escape(atob(pid))) 
-        : pid;
 
-    // ⭐ SÉCURITÉ : On protège le nom de la playlist contre les apostrophes et guillemets pour les attributs HTML onclick
-    const safeCleanId = cleanId
-        .replace(/'/g, "\\'")
-        .replace(/"/g, '&quot;');
+    const cleanId = encoded ? decodeURIComponent(escape(atob(pid))) : pid;
+    const safeCleanId = cleanId.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
     const div = document.getElementById('episodes_list');
     div.innerHTML = '<div class="loader">Plongée...</div>';
 
     try {
-        // 3. Récupération des données de la playlist et des listes locales
         const currentPl = allPlaylists.find(p => String(p.id).trim() === cleanId.trim());
         const playlistDesc = currentPl ? currentPl.description : "";
-        
-        // Lecture du localStorage pour l'état des boutons
+
         const savedFavs = JSON.parse(localStorage.getItem('bsg_favorites') || "[]");
         const savedLater = JSON.parse(localStorage.getItem('bsg_later') || "[]");
         const isFav = savedFavs.includes(cleanId);
         const isLater = savedLater.includes(cleanId);
 
-        // 4. Charger les épisodes depuis le JSON
         const res = await fetch(`data/episodes.json?v=${new Date().getTime()}`);
         const allEpisodes = await res.json();
 
-        // Filtrer et trier les épisodes de cette playlist
         episodes = allEpisodes
             .filter(e => String(e.playlistId).trim() === cleanId.trim())
             .sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -1915,18 +1770,13 @@ async function loadEpisodes(pid, encoded = false) {
         }
 
         const headerEncoded = btoa(unescape(encodeURIComponent(cleanId)));
-        
-        // 5. Construction des Hashtags
-        const hashtagsHtml = (currentPl && currentPl.hashtags) 
-            ? `<div class="playlist-tags-area">
-                ${currentPl.hashtags.split(' ').filter(t => t.trim() !== "").map(tag => {
-                    const safeTag = tag.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                    return `<span class="tag-mini" onclick="filterByHashtag(event, '${safeTag}')">#${tag}</span>`;
-                }).join('')}
-               </div>` 
+        const hashtagsHtml = (currentPl && currentPl.hashtags)
+            ? `<div class="playlist-tags-area">${currentPl.hashtags.split(' ').filter(t => t.trim() !== "").map(tag => {
+                const safeTag = tag.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                return `<span class="tag-mini" onclick="filterByHashtag(event, '${safeTag}')">#${tag}</span>`;
+            }).join('')}</div>`
             : "";
-        
-        // 6. Construction du HTML de l'en-tête
+
         let html = `
             <div class="playlist-header-container">
                 <h2>${cleanId}</h2>
@@ -1936,68 +1786,47 @@ async function loadEpisodes(pid, encoded = false) {
                     </svg>
                 </button>
             </div>
-            ${hashtagsHtml} 
+            ${hashtagsHtml}
         `;
-        
-        // Bloc Description
+
         if (playlistDesc && playlistDesc.trim() !== "") {
             html += `
-            <div class="playlist-description-container" id="desc-container" onclick="this.classList.toggle('expanded')">
-                <div class="playlist-description-content">
-                    ${playlistDesc}
-                </div>
-                <span class="read-more-hint">Lire la suite...</span>
-            </div>`;
+                <div class="playlist-description-container" id="desc-container" onclick="this.classList.toggle('expanded')">
+                    <div class="playlist-description-content">${playlistDesc}</div>
+                    <span class="read-more-hint">Lire la suite...</span>
+                </div>`;
         }
-        
-        // 7. LIGNE DES BOUTONS D'ACTION (Favoris, Plus tard, Partage)
-        // 👍 MODIFICATION : Utilisation de `safeCleanId` pour éviter de briser le onclick
+
         html += `
             <div class="episodes-header-row">
                 <h3>Épisodes</h3>
                 <div style="display: flex; gap: 8px;">
-                    <button class="btn-share" onclick="event.stopPropagation(); toggleSave('favorites', '${safeCleanId}', this)" title="Favoris">
-                        ${isFav ? '❤️' : '<span class="heart-empty">♡</span>'}
-                    </button>
-                    <button class="btn-share" onclick="toggleSave('later', '${safeCleanId}', this)" title="À regarder plus tard">
-                        ${isLater ? '🕒' : '⏳'}
-                    </button>
-                    <button class="btn-share" onclick="sharePlaylist(event, '${headerEncoded}')" title="Partager cette série">
-                        🔗
-                    </button>
+                    <button class="btn-share" onclick="event.stopPropagation(); toggleSave('favorites', '${safeCleanId}', this)" title="Favoris">${isFav ? '❤️' : '<span class="heart-empty">♡</span>'}</button>
+                    <button class="btn-share" onclick="toggleSave('later', '${safeCleanId}', this)" title="À regarder plus tard">${isLater ? '🕒' : '⏳'}</button>
+                    <button class="btn-share" onclick="sharePlaylist(event, '${headerEncoded}')" title="Partager cette série">🔗</button>
                 </div>
             </div>` +
-            // Liste des épisodes
             episodes.map((e, i) => {
-                // Si à l'avenir vous ajoutez des boutons spécifiques par épisode, 
-                // cette variable protégera également le titre de chaque épisode.
-                const safeTitle = e.title.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                
                 return `
                     <div class="episode-item list-item-ep" id="ep-${i}" onclick="play(${i})">
                         <span class="episode-title">${e.title}</span>
                         <span class="play-icon"></span>
-                    </div>
-                `;
+                    </div>`;
             }).join('');
 
         div.innerHTML = html;
 
-        // 8. Finalisation (Scroll et corrections de liens)
         setTimeout(() => {
             const titleSection = div.querySelector('.playlist-header-container');
-            if (titleSection) {
-                titleSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
+            if (titleSection) titleSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 50);
 
         const descLinks = div.querySelectorAll('.playlist-description-content a');
         descLinks.forEach(link => {
             link.setAttribute('target', '_blank');
             link.setAttribute('rel', 'noopener noreferrer');
-        });        
+        });
 
-        // Lecture auto du premier épisode
         play(0);
 
     } catch (err) {
@@ -2006,12 +1835,16 @@ async function loadEpisodes(pid, encoded = false) {
     }
 }
 
-
 // --- Fonction pour basculer les lecteurs ---
 function switchPlayers() {
-  const temp = audio;
-  audio = nextAudio;
-  nextAudio = temp;
+    const temp = audio;
+    audio = nextAudio;
+    nextAudio = temp;
+}
+
+// --- Récupérer le lecteur actif actuel ---
+function getActiveAudio() {
+    return audio;
 }
 
 // --- TA NOUVELLE FONCTION PLAY ---
@@ -2019,12 +1852,11 @@ async function play(i) {
     current = i;
     const episode = episodes[i];
     const pImg = document.getElementById('player-img');
+    const activeAudio = getActiveAudio();
 
-    // 1. UI : Sélection dans la liste
     document.querySelectorAll('.episode-item').forEach(el => el.classList.remove('current'));
     document.getElementById(`ep-${i}`)?.classList.add('current');
 
-    // 2. Gestion de l'image de l'épisode actuel
     if (pImg) {
         pImg.classList.remove('zoomed');
         if (episode.image && episode.image.trim() !== "") {
@@ -2036,134 +1868,115 @@ async function play(i) {
         }
     }
 
-    // 3. Assigner la source au lecteur ACTIF et lancer immédiatement
-    if (audio.src !== episode.audio) {
-        audio.src = episode.audio;
-        audio.load();
+    if (activeAudio.src !== episode.audio) {
+        activeAudio.src = episode.audio;
+        activeAudio.load();
     }
 
-    // Mise à jour immédiate de l'écran verrouillé
-    
-
     try {
-        await audio.play();
+        await activeAudio.play();
         updateMediaSession(episode);
     } catch (err) {
         console.error("Échec initial de la lecture, tentative de rechargement...", err);
         setTimeout(async () => {
             try {
-                audio.load();
-                await audio.play();
+                activeAudio.load();
+                await activeAudio.play();
+                updateMediaSession(episode);
             } catch (retryErr) {
                 console.error("Échec définitif de la lecture automatique:", retryErr);
             }
         }, 1000);
     }
 
-    // 4. L'ASTUCE CORRIGÉE : Anticiper et précharger l'audio ET l'image de l'épisode SUIVANT
     const nextIndex = i + 1;
     if (nextIndex < episodes.length) {
         const nextEpisode = episodes[nextIndex];
-        
-        // Préchargement de l'audio (déjà présent dans ton code)
         nextAudio.src = nextEpisode.audio;
-        nextAudio.load(); 
+        nextAudio.load();
 
-        // CRUCIAL : Préchargement de l'image de l'épisode suivant dans le cache du navigateur
         if (nextEpisode.image && nextEpisode.image.trim() !== "") {
             const imgCache = new Image();
-            imgCache.src = nextEpisode.image; 
-            // En faisant ça, le téléphone télécharge l'image en tâche de fond immédiatement.
-            // Quand l'écran sera verrouillé et qu'on passera à l'épisode suivant, 
-            // l'image sera déjà dans le téléphone et s'affichera instantanément !
+            imgCache.src = nextEpisode.image;
         }
+    }
+}
+
+// --- Fonctions d'enchaînement pour la MediaSession ---
+function playNext() {
+    if (current + 1 < episodes.length) {
+        // Optionnel : si un morceau suivant était déjà préchargé par l'autre lecteur, 
+        // on bascule les rôles de manière synchrone avant de lancer la lecture
+        switchPlayers(); 
+        play(current + 1);
+    }
+}
+
+function playPrevious() {
+    if (current > 0) {
+        play(current - 1);
     }
 }
 
 // --- ÉCOUTEURS D'ÉVÉNEMENTS LIÉS À L'UI ---
 function setupAudioListeners(playerElement) {
-  playerElement.addEventListener('play', () => {
-    if (playerElement !== audio) return; // Sécurité : n'agit que si c'est le lecteur actif
-    uiPlayer.classList.add('is-playing');
-    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
-    requestWakeLock();
-  });
+    playerElement.addEventListener('play', () => {
+        if (playerElement !== getActiveAudio()) return;
+        uiPlayer.classList.add('is-playing');
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
+        requestWakeLock();
+    });
 
-  playerElement.addEventListener('pause', () => {
-    if (playerElement !== audio) return;
-    uiPlayer.classList.remove('is-playing');
-    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "paused";
-  });
+    playerElement.addEventListener('pause', () => {
+        if (playerElement !== getActiveAudio()) return;
+        uiPlayer.classList.remove('is-playing');
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = "paused";
+        }
+    });
 
-  // CHANGEMENT ICI : On supprime totalement setPositionState pour éviter les sauts de titre
-  playerElement.addEventListener('timeupdate', () => {
-    if (playerElement !== audio || isScrubbing || !audio.duration) return;
-    
-    // On garde UNIQUEMENT la mise à jour visuelle du curseur de ton application
-    updateProgress(audio.currentTime / audio.duration);
-  });
+    playerElement.addEventListener('timeupdate', () => {
+        if (playerElement !== getActiveAudio() || isScrubbing || !playerElement.duration) return;
+        updateProgress(playerElement.currentTime / playerElement.duration);
+    });
 
-  playerElement.addEventListener('loadedmetadata', () => {
-    if (playerElement !== audio) return;
-    durationEl.textContent = formatTime(audio.duration);
-  });
+    playerElement.addEventListener('loadedmetadata', () => {
+        if (playerElement !== getActiveAudio()) return;
+        durationEl.textContent = formatTime(playerElement.duration);
+    });
 
-  // GESTION DU CHANGEMENT : Quand le morceau se termine
-  playerElement.addEventListener('ended', () => {
-      if (playerElement !== audio) return;
-  
-      if (current + 1 < episodes.length) {
-          // 1. On bascule les rôles des lecteurs de manière synchrone
-          switchPlayers();
-          
-          // 2. On force la mise à jour visuelle du tag img du DOM tout de suite
-          const nextEpisode = episodes[current + 1];
-          const pImg = document.getElementById('player-img');
-          if (pImg && nextEpisode.image && nextEpisode.image.trim() !== "") {
-              pImg.src = nextEpisode.image;
-          }
-  
-          // 3. On lance directement le morceau préchargé
-          play(current + 1);
-      }
-  });
+    playerElement.addEventListener('ended', () => {
+        if (playerElement !== getActiveAudio()) return;
+        playNext(); // Utilise la fonction d'enchaînement propre
+    });
 
-  // SÉCURITÉ RÉSEAU : Si le lecteur rencontre une erreur de chargement
-  playerElement.addEventListener('error', (e) => {
-    console.warn("Erreur de chargement détectée sur le lecteur. Tentative de récupération...", playerElement.error);
-    
-    const currentSrc = playerElement.src;
-    if (currentSrc) {
-      setTimeout(() => {
-        playerElement.load(); 
-      }, 2000); 
-    }
-  });
+    playerElement.addEventListener('error', (e) => {
+        console.warn("Erreur de chargement détectée sur le lecteur. Tentative de récupération...", playerElement.error);
+        const currentSrc = playerElement.src;
+        if (currentSrc) {
+            setTimeout(() => { playerElement.load(); }, 2000);
+        }
+    });
 }
 
-// Initialisation des écouteurs sur les deux lecteurs
 setupAudioListeners(audioA);
 setupAudioListeners(audioB);
-    
-// Cette variable permet de retenir quel épisode est en cours pour éviter les doublons
+
 let currentMediaSrc = null;
 
 function updateMediaSession(episode) {
     if (!('mediaSession' in navigator)) return;
+    const activeAudio = getActiveAudio();
 
-    // Si l'épisode est déjà le même, on met juste à jour l'état Play/Pause
     if (currentMediaSrc === episode.audio) {
-        navigator.mediaSession.playbackState = audio.paused ? "paused" : "playing";
-        return; 
+        navigator.mediaSession.playbackState = activeAudio.paused ? "paused" : "playing";
+        return;
     }
 
-    // Si c'est un nouvel épisode, on enregistre sa source
     currentMediaSrc = episode.audio;
-
     const defaultArtwork = "https://raw.githubusercontent.com/bsg-univers/ppdp-bsg/refs/heads/main/media/ppdp.png";
     const artworkUrl = (episode.image && episode.image.trim() !== "") ? episode.image : defaultArtwork;
 
-    // On envoie les infos au téléphone UNE SEULE FOIS au début de l'épisode
     navigator.mediaSession.metadata = new MediaMetadata({
         title: episode.title || "Épisode sans titre",
         artist: "Baleine sous Gravillon",
@@ -2173,18 +1986,15 @@ function updateMediaSession(episode) {
             { src: artworkUrl, sizes: '512x512', type: 'image/jpeg' }
         ]
     });
-
     navigator.mediaSession.playbackState = "playing";
 }
+
 function setupMediaSessionActions() {
     if (!('mediaSession' in navigator)) return;
 
-    // Quand l'utilisateur appuie sur PLAY depuis l'écran verrouillé
     navigator.mediaSession.setActionHandler('play', async () => {
-        // Le flux est conservé, on a juste à faire play()
         try {
-            // On récupère le lecteur audio actuellement actif (audioA ou audioB)
-            const activeAudio = getActiveAudio(); 
+            const activeAudio = getActiveAudio();
             await activeAudio.play();
             navigator.mediaSession.playbackState = "playing";
         } catch (err) {
@@ -2192,26 +2002,22 @@ function setupMediaSessionActions() {
         }
     });
 
-    // Quand l'utilisateur appuie sur PAUSE depuis l'écran verrouillé
     navigator.mediaSession.setActionHandler('pause', () => {
         const activeAudio = getActiveAudio();
         activeAudio.pause();
         navigator.mediaSession.playbackState = "paused";
     });
 
-    // Gestion des boutons Suivant / Précédent (optionnel, selon ton code existant)
     navigator.mediaSession.setActionHandler('previousepisode', () => {
-        playPrevious(); // Appelle ta fonction pour l'épisode précédent
+        playPrevious();
     });
     navigator.mediaSession.setActionHandler('nextepisode', () => {
-        playNext(); // Appelle ta fonction pour l'épisode suivant
+        playNext();
     });
 }
 
-// Appelle cette fonction UNE SEULE FOIS au démarrage de l'application
 setupMediaSessionActions();
-    
-// --- GESTION DU WAKE LOCK (Empêcher la mise en veille profonde) ---
+
 let wakeLock = null;
 async function requestWakeLock() {
     try {
@@ -2229,37 +2035,31 @@ loadPlaylists();
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(err => console.log("Erreur SW", err));
 }
-    
+
 document.addEventListener('click', function(e) {
     const pImg = document.getElementById('player-img');
-    const pLink = document.getElementById('logo-link');
     if (!pImg) return;
 
-    // Si on clique sur l'image
     if (e.target === pImg) {
-        // SI C'EST UN ÉPISODE : On gère le zoom et on bloque le lien
         if (pImg.classList.contains('is-episode')) {
-            e.preventDefault(); // Empêche le lien de s'ouvrir
+            e.preventDefault();
             pImg.classList.toggle('zoomed');
-        } 
-        // SI C'EST LE LOGO : On laisse le comportement par défaut (le lien s'ouvre)
-    } 
-    // Si on clique ailleurs alors que c'est zoomé, on dézoome
-    else if (pImg.classList.contains('zoomed')) {
+        }
+    } else if (pImg.classList.contains('zoomed')) {
         pImg.classList.remove('zoomed');
     }
 });
-    
+
 window.addEventListener('scroll', function() {
     const logo = document.querySelector('.logo-main');
     if (logo) {
         let scrollPos = window.scrollY;
-        // Le logo s'efface progressivement sur les 150 premiers pixels de scroll
         let opacity = 1 - (scrollPos / 150);
         logo.style.opacity = Math.max(opacity, 0);
     }
 });
-document.getElementById('player-img').src = "https://raw.githubusercontent.com/bsg-univers/ppdp-bsg/refs/heads/main/media/ppdp.png"; 
+
+document.getElementById('player-img').src = "https://raw.githubusercontent.com/bsg-univers/ppdp-bsg/refs/heads/main/media/ppdp.png";
 </script>
     <div id="toast">Lien de la série copié !</div>
 </body>
