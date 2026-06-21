@@ -1960,5 +1960,23 @@
     "order": 1,
     "guid": "4ada144205fa223ed4199a4705004d4580d6b2ee",
     "image": "https://image.ausha.co/CBnPjfz7mxzBMJg4Fc3OGIHETweeY5jv4GH5JdU0_1400x1400.jpeg?t=1676299818"
+  },
+  {
+    "episodeId": "20",
+    "playlistId": "Les Pinnipèdes",
+    "title": "S05E42 Les Pinnipèdes : L'Otarie de Californie, la star de la Côte Ouest",
+    "audio": "https://audio.ausha.co/BnMQ8haWadK7.mp3?t=1781457470",
+    "order": 20,
+    "guid": "76c4727cbbe12b57fd2220715c10dbe7c559b27d",
+    "image": "https://image.ausha.co/BmgELPewcBoAf3xDUwiLsM0oBMkxBbk64diwjHmX_1400x1400.jpeg?t=1781457488"
+  },
+  {
+    "episodeId": "19",
+    "playlistId": "Les Pinnipèdes",
+    "title": "S05E41 Les Pinnipèdes : Le Léopard de mer, un fauve sanguinaire ?",
+    "audio": "https://audio.ausha.co/BNw6lhAML3e2.mp3?t=1780845526",
+    "order": 19,
+    "guid": "89013695493612003192a6437a2c78a88357f885",
+    "image": "https://image.ausha.co/iRpP5ZCtl4TzXX0SnhmI7yMTdFXEwnxcMjOZVyZ5_1400x1400.jpeg?t=1780846233"
   }
 ]
